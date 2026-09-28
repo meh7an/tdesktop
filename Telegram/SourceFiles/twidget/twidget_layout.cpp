@@ -19,9 +19,6 @@ namespace Twidget {
 namespace {
 
 constexpr auto kFramesFormat = 1;
-constexpr auto kDividerMargin = 4.;
-constexpr auto kFieldGap = 4.;
-constexpr auto kFieldPadding = 10.;
 constexpr auto kChartHeight = 0.6;
 constexpr auto kSlack = 1e-6;
 constexpr auto kEllipsis = char32_t(0x2026);
@@ -53,11 +50,8 @@ private:
 	[[nodiscard]] LaidNode text(const Node &node, float64 w) const;
 	[[nodiscard]] LaidNode textField(const Node &node, float64 w) const;
 	[[nodiscard]] std::vector<LaidLine> lines(
-		const QString &text,
-		float64 width,
-		TextStyle style,
-		std::optional<int> maxLines,
-		Align align) const;
+		const TextData &text,
+		float64 width) const;
 	void sideBySide(
 		std::vector<LaidNode> &laid,
 		float64 w,
@@ -414,12 +408,7 @@ LaidNode Engine::frame(const Node &frame, float64 scale) const {
 
 LaidNode Engine::text(const Node &node, float64 w) const {
 	const auto &data = node.text;
-	auto lines = this->lines(
-		data.text,
-		w,
-		data.style,
-		data.maxLines,
-		data.align);
+	auto lines = this->lines(data, w);
 	auto result = Leaf(
 		node,
 		w,
@@ -430,26 +419,15 @@ LaidNode Engine::text(const Node &node, float64 w) const {
 
 LaidNode Engine::textField(const Node &node, float64 w) const {
 	const auto &data = node.field;
-	auto lines = this->lines(
-		data.label,
-		w,
-		TextStyle::Caption,
-		std::nullopt,
-		Align::Start);
+	auto lines = this->lines(FieldLabel(data), w);
 	const auto labels = int(lines.size());
 	const auto top = lines.empty()
 		? 0.
 		: (float64(labels) * _measurer->lineHeight(TextStyle::Caption)
 			+ kFieldGap);
-	const auto &shown = data.value.isEmpty()
-		? data.placeholder
-		: data.value;
 	const auto values = this->lines(
-		shown,
-		AtLeastZero(w - 2. * kFieldPadding),
-		TextStyle::Body,
-		std::nullopt,
-		Align::Start);
+		FieldValue(data),
+		AtLeastZero(w - 2. * kFieldPadding));
 	const auto rows = Larger(
 		float64(values.size()),
 		std::floor(AtLeastZero(data.lines)));
@@ -473,18 +451,15 @@ LaidNode Engine::textField(const Node &node, float64 w) const {
 }
 
 std::vector<LaidLine> Engine::lines(
-		const QString &text,
-		float64 width,
-		TextStyle style,
-		std::optional<int> maxLines,
-		Align align) const {
-	const auto lineHeight = _measurer->lineHeight(style);
+		const TextData &text,
+		float64 width) const {
+	const auto lineHeight = _measurer->lineHeight(text.style);
 	auto result = std::vector<LaidLine>();
-	for (auto &line : _measurer->lines(text, style, width, maxLines)) {
+	for (auto &line : _measurer->lines(text, width)) {
 		const auto index = float64(result.size());
 		result.push_back({
 			.text = std::move(line.text),
-			.x = across(align, width, line.width),
+			.x = across(text.align, width, line.width),
 			.y = index * lineHeight,
 		});
 	}
@@ -528,6 +503,17 @@ float64 Engine::across(Align align, float64 space, float64 size) const {
 
 } // namespace
 
+TextData FieldLabel(const FieldData &field) {
+	return { .text = field.label, .style = TextStyle::Caption };
+}
+
+TextData FieldValue(const FieldData &field) {
+	return {
+		.text = field.value.isEmpty() ? field.placeholder : field.value,
+		.style = TextStyle::Body,
+	};
+}
+
 float64 FakeTextMeasurer::lineHeight(TextStyle style) const {
 	return MetricsOf(style).lineHeight;
 }
@@ -537,14 +523,16 @@ float64 FakeTextMeasurer::hairline() const {
 }
 
 std::vector<MeasuredLine> FakeTextMeasurer::lines(
-		const QString &text,
-		TextStyle style,
-		float64 width,
-		std::optional<int> maxLines) const {
-	const auto metrics = MetricsOf(style);
-	const auto source = text.toStdU32String();
+		const TextData &text,
+		float64 width) const {
+	const auto metrics = MetricsOf(text.style);
+	const auto source = text.text.toStdU32String();
 	auto result = std::vector<MeasuredLine>();
-	for (const auto &line : FakeLines(source, width, metrics, maxLines)) {
+	for (const auto &line : FakeLines(
+			source,
+			width,
+			metrics,
+			text.maxLines)) {
 		result.push_back({
 			.text = QString::fromStdU32String(line),
 			.width = float64(line.size()) * metrics.advance,

@@ -13,6 +13,10 @@ namespace style {
 struct TextStyle;
 } // namespace style
 
+namespace Ui::Text {
+class String;
+} // namespace Ui::Text
+
 namespace Twidget {
 
 class RealTextMeasurer final : public TextMeasurer {
@@ -20,15 +24,19 @@ public:
 	RealTextMeasurer();
 	~RealTextMeasurer();
 
+	[[nodiscard]] float64 unit() const;
+	[[nodiscard]] int pixels(float64 width) const;
 	[[nodiscard]] const style::TextStyle &textStyle(TextStyle style) const;
+	[[nodiscard]] Ui::Text::String prepare(
+		const TextData &text,
+		float64 width,
+		bool rtl) const;
 
 	[[nodiscard]] float64 lineHeight(TextStyle style) const override;
 	[[nodiscard]] float64 hairline() const override;
 	[[nodiscard]] std::vector<MeasuredLine> lines(
-		const QString &text,
-		TextStyle style,
-		float64 width,
-		std::optional<int> maxLines) const override;
+		const TextData &text,
+		float64 width) const override;
 
 private:
 	float64 _unit = 1.;

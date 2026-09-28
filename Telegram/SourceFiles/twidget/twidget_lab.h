@@ -18,7 +18,9 @@ class Controller;
 
 namespace Twidget {
 
-void LabBox(not_null<Ui::GenericBox*> box);
+void LabBox(
+	not_null<Ui::GenericBox*> box,
+	not_null<Window::Controller*> window);
 
 [[nodiscard]] QString AddLabButton(
 	not_null<Window::Controller*> window,

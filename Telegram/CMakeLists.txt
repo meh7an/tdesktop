@@ -2013,6 +2013,8 @@ PRIVATE
     test/test_widgets.h
     twidget/twidget_lab.cpp
     twidget/twidget_lab.h
+    twidget/twidget_paint.cpp
+    twidget/twidget_paint.h
     twidget/twidget_text.cpp
     twidget/twidget_text.h
     ui/boxes/edit_invite_link_session.cpp

@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QSizeF>
 #include <QtCore/QStringList>
 #include <QtGui/QColor>
+#include <QtGui/QPainterPath>
 
 #include <array>
 #include <optional>
@@ -69,10 +70,34 @@ enum class LineJoin : uchar {
 	Bevel,
 };
 
+enum class ColorToken : uchar {
+	Text,
+	TextSecondary,
+	Accent,
+	OnAccent,
+	Surface,
+	SurfaceAlt,
+	Divider,
+	Positive,
+	Negative,
+	Warning,
+	Palette1,
+	Palette2,
+	Palette3,
+	Palette4,
+	Palette5,
+	Palette6,
+	Palette7,
+	Fixed,
+	Unknown,
+};
+
+inline constexpr auto kColorTokenCount = int(ColorToken::Fixed);
+
 struct Color {
-	QString token;
+	ColorToken token = ColorToken::Unknown;
 	QColor fixed;
-	float64 alpha = 1.;
+	std::optional<float64> alpha;
 };
 
 struct Padding {
@@ -145,7 +170,7 @@ struct ShapeData {
 	QPointF to;
 	float64 rx = 0.;
 	float64 ry = 0.;
-	QString path;
+	QPainterPath path;
 	std::optional<Color> fill;
 	std::optional<Color> stroke;
 	float64 strokeWidth = 1.;

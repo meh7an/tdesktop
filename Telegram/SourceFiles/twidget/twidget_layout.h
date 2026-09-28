@@ -13,6 +13,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace Twidget {
 
+inline constexpr auto kDividerMargin = 4.;
+inline constexpr auto kFieldGap = 4.;
+inline constexpr auto kFieldPadding = 10.;
+inline constexpr auto kFieldRadius = 8.;
+
 struct MeasuredLine {
 	QString text;
 	float64 width = 0.;
@@ -25,10 +30,8 @@ public:
 	[[nodiscard]] virtual float64 lineHeight(TextStyle style) const = 0;
 	[[nodiscard]] virtual float64 hairline() const = 0;
 	[[nodiscard]] virtual std::vector<MeasuredLine> lines(
-		const QString &text,
-		TextStyle style,
-		float64 width,
-		std::optional<int> maxLines) const = 0;
+		const TextData &text,
+		float64 width) const = 0;
 
 };
 
@@ -37,10 +40,8 @@ public:
 	[[nodiscard]] float64 lineHeight(TextStyle style) const override;
 	[[nodiscard]] float64 hairline() const override;
 	[[nodiscard]] std::vector<MeasuredLine> lines(
-		const QString &text,
-		TextStyle style,
-		float64 width,
-		std::optional<int> maxLines) const override;
+		const TextData &text,
+		float64 width) const override;
 
 };
 
@@ -68,6 +69,9 @@ struct Layout {
 	float64 height = 0.;
 	std::optional<LaidNode> root;
 };
+
+[[nodiscard]] TextData FieldLabel(const FieldData &field);
+[[nodiscard]] TextData FieldValue(const FieldData &field);
 
 [[nodiscard]] Layout LayOut(
 	const Document &document,

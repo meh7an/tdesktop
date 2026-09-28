@@ -90,6 +90,104 @@ template <typename Type, size_t Size>
 	return Lookup(kJoins, name).value_or(LineJoin::Miter);
 }
 
+[[nodiscard]] std::optional<ColorToken> ParseToken(const QString &name) {
+	static constexpr auto kTokens = std::array<
+		Named<ColorToken>,
+		kColorTokenCount>{ {
+		{ u"text", ColorToken::Text },
+		{ u"text_secondary", ColorToken::TextSecondary },
+		{ u"accent", ColorToken::Accent },
+		{ u"on_accent", ColorToken::OnAccent },
+		{ u"surface", ColorToken::Surface },
+		{ u"surface_alt", ColorToken::SurfaceAlt },
+		{ u"divider", ColorToken::Divider },
+		{ u"positive", ColorToken::Positive },
+		{ u"negative", ColorToken::Negative },
+		{ u"warning", ColorToken::Warning },
+		{ u"palette_1", ColorToken::Palette1 },
+		{ u"palette_2", ColorToken::Palette2 },
+		{ u"palette_3", ColorToken::Palette3 },
+		{ u"palette_4", ColorToken::Palette4 },
+		{ u"palette_5", ColorToken::Palette5 },
+		{ u"palette_6", ColorToken::Palette6 },
+		{ u"palette_7", ColorToken::Palette7 },
+	} };
+	return Lookup(kTokens, name);
+}
+
+[[nodiscard]] bool IsPathCommand(QChar ch) {
+	return (ch == u'M') || (ch == u'L') || (ch == u'C') || (ch == u'Z');
+}
+
+[[nodiscard]] int PathArguments(QChar command) {
+	return (command == u'C')
+		? 6
+		: ((command == u'M') || (command == u'L'))
+		? 2
+		: 0;
+}
+
+[[nodiscard]] QPainterPath ParsePath(const QString &data) {
+	auto result = QPainterPath();
+	result.setFillRule(Qt::WindingFill);
+	auto command = QChar();
+	auto numbers = std::array<float64, 6>();
+	auto count = 0;
+	auto i = 0;
+	while (i < data.size()) {
+		const auto ch = data[i];
+		if (ch == u' ' || ch == u',') {
+			++i;
+			continue;
+		} else if (ch == u'Z') {
+			result.closeSubpath();
+			command = QChar();
+			count = 0;
+			++i;
+			continue;
+		} else if (IsPathCommand(ch)) {
+			command = ch;
+			count = 0;
+			++i;
+			continue;
+		}
+		auto till = i;
+		while (till < data.size()
+			&& data[till] != u' '
+			&& data[till] != u','
+			&& !IsPathCommand(data[till])) {
+			++till;
+		}
+		auto ok = false;
+		const auto value = QStringView(data).mid(i, till - i).toDouble(&ok);
+		const auto needed = PathArguments(command);
+		if (!ok || !needed) {
+			return QPainterPath();
+		}
+		numbers[count++] = value;
+		i = till;
+		if (count < needed) {
+			continue;
+		}
+		count = 0;
+		if (command == u'M') {
+			result.moveTo(numbers[0], numbers[1]);
+			command = u'L';
+		} else if (command == u'L') {
+			result.lineTo(numbers[0], numbers[1]);
+		} else {
+			result.cubicTo(
+				numbers[0],
+				numbers[1],
+				numbers[2],
+				numbers[3],
+				numbers[4],
+				numbers[5]);
+		}
+	}
+	return result;
+}
+
 [[nodiscard]] std::optional<float64> Number(
 		const QJsonObject &object,
 		const QString &name) {
@@ -118,17 +216,24 @@ template <typename Type, size_t Size>
 	if (text.startsWith(u'#')) {
 		const auto fixed = QColor::fromString(text);
 		return fixed.isValid()
-			? std::make_optional(Color{ .fixed = fixed })
+			? std::make_optional(Color{
+				.token = ColorToken::Fixed,
+				.fixed = fixed,
+			})
 			: std::nullopt;
 	}
 	const auto at = text.indexOf(u'@');
-	if (at < 0) {
-		return Color{ .token = text };
+	const auto token = ParseToken((at < 0) ? text : text.left(at));
+	if (!token) {
+		return std::nullopt;
+	} else if (at < 0) {
+		return Color{ .token = *token };
 	}
-	return Color{
-		.token = text.left(at),
-		.alpha = text.mid(at + 1).toDouble(),
-	};
+	auto ok = false;
+	const auto alpha = text.mid(at + 1).toDouble(&ok);
+	return ok
+		? std::make_optional(Color{ .token = *token, .alpha = alpha })
+		: std::nullopt;
 }
 
 [[nodiscard]] Padding ParsePadding(const QJsonValue &value) {
@@ -290,7 +395,7 @@ template <size_t Size>
 			NumberOr(object, u"y2"_q, 0.)),
 		.rx = NumberOr(object, u"rx"_q, 0.),
 		.ry = NumberOr(object, u"ry"_q, 0.),
-		.path = String(object, u"d"_q),
+		.path = ParsePath(String(object, u"d"_q)),
 		.fill = ParseColor(object.value(u"fill"_q)),
 		.stroke = ParseColor(object.value(u"stroke"_q)),
 		.strokeWidth = NumberOr(object, u"stroke_width"_q, 1.),
