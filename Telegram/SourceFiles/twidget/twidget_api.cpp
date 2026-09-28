@@ -8,19 +8,37 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "twidget/twidget_api.h"
 
 #include "base/debug_log.h"
+#include "base/flat_map.h"
 #include "base/unixtime.h"
 #include "ui/style/style_core_direction.h"
 
 #include <twidget.h>
 
 #include <QtCore/QDateTime>
+#include <QtCore/QFile>
 
 namespace Twidget {
 namespace {
 
 constexpr auto kReadAttempts = 3;
 
+struct TemplateDeleter {
+	void operator()(TWidgetTemplate *value) const;
+};
+
+using TemplateHandle = std::unique_ptr<TWidgetTemplate, TemplateDeleter>;
+
+struct Output {
+	QByteArray bytes;
+	int32_t status = TWIDGET_OK;
+};
+
 auto AbiMatches = false;
+auto Templates = base::flat_map<QString, TemplateHandle>();
+
+void TemplateDeleter::operator()(TWidgetTemplate *value) const {
+	twidget_template_drop(value);
+}
 
 [[nodiscard]] QString StatusName(int32_t status) {
 	switch (status) {
@@ -88,36 +106,78 @@ void LogFailure(const QString &function, int32_t status) {
 }
 
 template <typename Call>
-[[nodiscard]] std::optional<QByteArray> ReadOutput(
-		const QString &function,
-		Call &&call) {
-	auto result = QByteArray();
+[[nodiscard]] Output ReadOutput(Call &&call) {
+	auto result = Output();
 	for (auto attempt = 0; attempt != kReadAttempts; ++attempt) {
 		auto length = size_t(0);
-		const auto status = call(
-			(result.isEmpty()
+		result.status = call(
+			(result.bytes.isEmpty()
 				? nullptr
-				: reinterpret_cast<uint8_t*>(result.data())),
-			size_t(result.size()),
+				: reinterpret_cast<uint8_t*>(result.bytes.data())),
+			size_t(result.bytes.size()),
 			&length);
-		if (status == TWIDGET_OK) {
-			result.resize(qsizetype(length));
+		if (result.status == TWIDGET_OK) {
+			result.bytes.resize(qsizetype(length));
 			return result;
-		} else if (status != TWIDGET_ERROR_BUFFER_TOO_SMALL) {
-			LogFailure(function, status);
-			return std::nullopt;
+		} else if (result.status != TWIDGET_ERROR_BUFFER_TOO_SMALL) {
+			result.bytes = QByteArray();
+			return result;
 		}
-		result.resize(qsizetype(length));
+		result.bytes.resize(qsizetype(length));
 	}
-	LogFailure(function, TWIDGET_ERROR_BUFFER_TOO_SMALL);
-	return std::nullopt;
+	result.bytes = QByteArray();
+	return result;
+}
+
+[[nodiscard]] TemplateHandle MakeTemplate(const QByteArray &json) {
+	auto status = int32_t(TWIDGET_OK);
+	auto result = TemplateHandle(twidget_template_new(
+		Bytes(json),
+		size_t(json.size()),
+		&status));
+	if (!result) {
+		LogFailure(u"twidget_template_new"_q, status);
+	}
+	return result;
+}
+
+[[nodiscard]] InstanceHandle MakeInstance(
+		const QByteArray &envelope,
+		const TWidgetTemplate *bundled) {
+	auto status = int32_t(TWIDGET_OK);
+	auto result = InstanceHandle(twidget_instance_new(
+		Bytes(envelope),
+		size_t(envelope.size()),
+		bundled,
+		&status));
+	if (!result) {
+		LogFailure(u"twidget_instance_new"_q, status);
+	}
+	return result;
+}
+
+[[nodiscard]] const TWidgetTemplate *BundledTemplate(
+		const QString &id,
+		uint32_t version) {
+	const auto name = u"%1@%2"_q.arg(id).arg(version);
+	const auto i = Templates.find(name);
+	if (i != Templates.end()) {
+		return i->second.get();
+	}
+	auto file = QFile(u":/tgw/templates/%1.json"_q.arg(name));
+	auto loaded = TemplateHandle();
+	if (file.open(QIODevice::ReadOnly)) {
+		loaded = MakeTemplate(file.readAll());
+	} else {
+		LOG(("Twidget Error: no bundled template %1.").arg(name));
+	}
+	if (loaded) {
+		LOG(("Twidget Info: bundled template %1 loaded.").arg(name));
+	}
+	return Templates.emplace(name, std::move(loaded)).first->second.get();
 }
 
 } // namespace
-
-void TemplateDeleter::operator()(TWidgetTemplate *value) const {
-	twidget_template_drop(value);
-}
 
 void InstanceDeleter::operator()(TWidgetInstance *value) const {
 	twidget_instance_drop(value);
@@ -148,31 +208,28 @@ Env CurrentEnv(bool dark) {
 	};
 }
 
-TemplateHandle MakeTemplate(const QByteArray &json) {
-	auto status = int32_t(TWIDGET_OK);
-	auto result = TemplateHandle(twidget_template_new(
-		Bytes(json),
-		size_t(json.size()),
-		&status));
-	if (!result) {
-		LogFailure(u"twidget_template_new"_q, status);
+InstanceHandle LoadInstance(const QByteArray &envelope) {
+	auto version = uint32_t(0);
+	const auto call = [&](uint8_t *out, size_t capacity, size_t *length) {
+		return twidget_envelope_template_ref(
+			Bytes(envelope),
+			size_t(envelope.size()),
+			out,
+			capacity,
+			length,
+			&version);
+	};
+	const auto ref = ReadOutput(call);
+	if (ref.status == TWIDGET_ERROR_NOT_FOUND) {
+		return MakeInstance(envelope, nullptr);
+	} else if (ref.status != TWIDGET_OK) {
+		LogFailure(u"twidget_envelope_template_ref"_q, ref.status);
+		return nullptr;
 	}
-	return result;
-}
-
-InstanceHandle MakeInstance(
-		const QByteArray &envelope,
-		const TWidgetTemplate *bundled) {
-	auto status = int32_t(TWIDGET_OK);
-	auto result = InstanceHandle(twidget_instance_new(
-		Bytes(envelope),
-		size_t(envelope.size()),
-		bundled,
-		&status));
-	if (!result) {
-		LogFailure(u"twidget_instance_new"_q, status);
-	}
-	return result;
+	const auto bundled = BundledTemplate(
+		QString::fromUtf8(ref.bytes),
+		version);
+	return bundled ? MakeInstance(envelope, bundled) : nullptr;
 }
 
 std::optional<Resolved> Resolve(
@@ -183,12 +240,13 @@ std::optional<Resolved> Resolve(
 	const auto call = [&](uint8_t *out, size_t capacity, size_t *length) {
 		return twidget_resolve(instance, &raw, out, capacity, length, &wakeup);
 	};
-	auto tree = ReadOutput(u"twidget_resolve"_q, call);
-	if (!tree) {
+	auto output = ReadOutput(call);
+	if (output.status != TWIDGET_OK) {
+		LogFailure(u"twidget_resolve"_q, output.status);
 		return std::nullopt;
 	}
 	return Resolved{
-		.tree = std::move(*tree),
+		.tree = std::move(output.bytes),
 		.nextWakeupMs = ((wakeup == TWIDGET_NO_WAKEUP)
 			? std::nullopt
 			: std::make_optional(int64(wakeup))),
@@ -202,10 +260,12 @@ std::optional<QString> Summary(
 	const auto call = [&](uint8_t *out, size_t capacity, size_t *length) {
 		return twidget_summary(instance, &raw, out, capacity, length);
 	};
-	const auto text = ReadOutput(u"twidget_summary"_q, call);
-	return text
-		? std::make_optional(QString::fromUtf8(*text))
-		: std::nullopt;
+	const auto output = ReadOutput(call);
+	if (output.status != TWIDGET_OK) {
+		LogFailure(u"twidget_summary"_q, output.status);
+		return std::nullopt;
+	}
+	return QString::fromUtf8(output.bytes);
 }
 
 } // namespace Twidget

@@ -1,0 +1,46 @@
+<RCC>
+  <qresource prefix="/tgw">
+    <file alias="templates/tg.chess@1.json">../../../ThirdParty/twidget/fixtures/templates/tg.chess@1.json</file>
+    <file alias="templates/tg.kanban@1.json">../../../ThirdParty/twidget/fixtures/templates/tg.kanban@1.json</file>
+    <file alias="fixtures/envelopes/chart.json">../../../ThirdParty/twidget/fixtures/envelopes/chart.json</file>
+    <file alias="fixtures/envelopes/chess.json">../../../ThirdParty/twidget/fixtures/envelopes/chess.json</file>
+    <file alias="fixtures/envelopes/chess_start.json">../../../ThirdParty/twidget/fixtures/envelopes/chess_start.json</file>
+    <file alias="fixtures/envelopes/clock.json">../../../ThirdParty/twidget/fixtures/envelopes/clock.json</file>
+    <file alias="fixtures/envelopes/flow.json">../../../ThirdParty/twidget/fixtures/envelopes/flow.json</file>
+    <file alias="fixtures/envelopes/kanban.json">../../../ThirdParty/twidget/fixtures/envelopes/kanban.json</file>
+    <file alias="fixtures/envelopes/shapes.json">../../../ThirdParty/twidget/fixtures/envelopes/shapes.json</file>
+    <file alias="fixtures/envelopes/textbox.json">../../../ThirdParty/twidget/fixtures/envelopes/textbox.json</file>
+    <file alias="fixtures/expected/frames/chart.240.json">../../../ThirdParty/twidget/fixtures/expected/frames/chart.240.json</file>
+    <file alias="fixtures/expected/frames/chart.320.json">../../../ThirdParty/twidget/fixtures/expected/frames/chart.320.json</file>
+    <file alias="fixtures/expected/frames/chart.320.rtl.json">../../../ThirdParty/twidget/fixtures/expected/frames/chart.320.rtl.json</file>
+    <file alias="fixtures/expected/frames/chart.480.json">../../../ThirdParty/twidget/fixtures/expected/frames/chart.480.json</file>
+    <file alias="fixtures/expected/frames/chess.240.json">../../../ThirdParty/twidget/fixtures/expected/frames/chess.240.json</file>
+    <file alias="fixtures/expected/frames/chess.320.json">../../../ThirdParty/twidget/fixtures/expected/frames/chess.320.json</file>
+    <file alias="fixtures/expected/frames/chess.320.rtl.json">../../../ThirdParty/twidget/fixtures/expected/frames/chess.320.rtl.json</file>
+    <file alias="fixtures/expected/frames/chess.480.json">../../../ThirdParty/twidget/fixtures/expected/frames/chess.480.json</file>
+    <file alias="fixtures/expected/frames/chess_start.240.json">../../../ThirdParty/twidget/fixtures/expected/frames/chess_start.240.json</file>
+    <file alias="fixtures/expected/frames/chess_start.320.json">../../../ThirdParty/twidget/fixtures/expected/frames/chess_start.320.json</file>
+    <file alias="fixtures/expected/frames/chess_start.320.rtl.json">../../../ThirdParty/twidget/fixtures/expected/frames/chess_start.320.rtl.json</file>
+    <file alias="fixtures/expected/frames/chess_start.480.json">../../../ThirdParty/twidget/fixtures/expected/frames/chess_start.480.json</file>
+    <file alias="fixtures/expected/frames/clock.240.json">../../../ThirdParty/twidget/fixtures/expected/frames/clock.240.json</file>
+    <file alias="fixtures/expected/frames/clock.320.json">../../../ThirdParty/twidget/fixtures/expected/frames/clock.320.json</file>
+    <file alias="fixtures/expected/frames/clock.320.rtl.json">../../../ThirdParty/twidget/fixtures/expected/frames/clock.320.rtl.json</file>
+    <file alias="fixtures/expected/frames/clock.480.json">../../../ThirdParty/twidget/fixtures/expected/frames/clock.480.json</file>
+    <file alias="fixtures/expected/frames/flow.240.json">../../../ThirdParty/twidget/fixtures/expected/frames/flow.240.json</file>
+    <file alias="fixtures/expected/frames/flow.320.json">../../../ThirdParty/twidget/fixtures/expected/frames/flow.320.json</file>
+    <file alias="fixtures/expected/frames/flow.320.rtl.json">../../../ThirdParty/twidget/fixtures/expected/frames/flow.320.rtl.json</file>
+    <file alias="fixtures/expected/frames/flow.480.json">../../../ThirdParty/twidget/fixtures/expected/frames/flow.480.json</file>
+    <file alias="fixtures/expected/frames/kanban.240.json">../../../ThirdParty/twidget/fixtures/expected/frames/kanban.240.json</file>
+    <file alias="fixtures/expected/frames/kanban.320.json">../../../ThirdParty/twidget/fixtures/expected/frames/kanban.320.json</file>
+    <file alias="fixtures/expected/frames/kanban.320.rtl.json">../../../ThirdParty/twidget/fixtures/expected/frames/kanban.320.rtl.json</file>
+    <file alias="fixtures/expected/frames/kanban.480.json">../../../ThirdParty/twidget/fixtures/expected/frames/kanban.480.json</file>
+    <file alias="fixtures/expected/frames/shapes.240.json">../../../ThirdParty/twidget/fixtures/expected/frames/shapes.240.json</file>
+    <file alias="fixtures/expected/frames/shapes.320.json">../../../ThirdParty/twidget/fixtures/expected/frames/shapes.320.json</file>
+    <file alias="fixtures/expected/frames/shapes.320.rtl.json">../../../ThirdParty/twidget/fixtures/expected/frames/shapes.320.rtl.json</file>
+    <file alias="fixtures/expected/frames/shapes.480.json">../../../ThirdParty/twidget/fixtures/expected/frames/shapes.480.json</file>
+    <file alias="fixtures/expected/frames/textbox.240.json">../../../ThirdParty/twidget/fixtures/expected/frames/textbox.240.json</file>
+    <file alias="fixtures/expected/frames/textbox.320.json">../../../ThirdParty/twidget/fixtures/expected/frames/textbox.320.json</file>
+    <file alias="fixtures/expected/frames/textbox.320.rtl.json">../../../ThirdParty/twidget/fixtures/expected/frames/textbox.320.rtl.json</file>
+    <file alias="fixtures/expected/frames/textbox.480.json">../../../ThirdParty/twidget/fixtures/expected/frames/textbox.480.json</file>
+  </qresource>
+</RCC>

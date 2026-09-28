@@ -12,7 +12,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <optional>
 
 struct TWidgetInstance;
-struct TWidgetTemplate;
 
 namespace Twidget {
 
@@ -28,15 +27,10 @@ struct Resolved {
 	std::optional<int64> nextWakeupMs;
 };
 
-struct TemplateDeleter {
-	void operator()(TWidgetTemplate *value) const;
-};
-
 struct InstanceDeleter {
 	void operator()(TWidgetInstance *value) const;
 };
 
-using TemplateHandle = std::unique_ptr<TWidgetTemplate, TemplateDeleter>;
 using InstanceHandle = std::unique_ptr<TWidgetInstance, InstanceDeleter>;
 
 void CheckAbiVersion();
@@ -44,10 +38,7 @@ void CheckAbiVersion();
 
 [[nodiscard]] Env CurrentEnv(bool dark);
 
-[[nodiscard]] TemplateHandle MakeTemplate(const QByteArray &json);
-[[nodiscard]] InstanceHandle MakeInstance(
-	const QByteArray &envelope,
-	const TWidgetTemplate *bundled = nullptr);
+[[nodiscard]] InstanceHandle LoadInstance(const QByteArray &envelope);
 
 [[nodiscard]] std::optional<Resolved> Resolve(
 	not_null<TWidgetInstance*> instance,

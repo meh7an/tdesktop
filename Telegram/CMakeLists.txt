@@ -2240,6 +2240,7 @@ PRIVATE
     qrc/telegram/picker.qrc
     qrc/telegram/telegram.qrc
     qrc/telegram/sounds.qrc
+    qrc/telegram/twidget.qrc
     winrc/Telegram.rc
     winrc/Telegram.manifest
     langs/lang.strings
