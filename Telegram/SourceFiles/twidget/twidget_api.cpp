@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "base/debug_log.h"
 #include "base/flat_map.h"
+#include "base/options.h"
 #include "base/unixtime.h"
 #include "ui/style/style_core_direction.h"
 
@@ -21,6 +22,15 @@ namespace Twidget {
 namespace {
 
 constexpr auto kReadAttempts = 3;
+constexpr auto kFixedNowMs = int64(1790415687123);
+constexpr auto kFixedTzOffsetMinutes = 210;
+
+base::options::toggle LiveWidgetsOption({
+	.id = kOptionLiveWidgets,
+	.name = "Live widgets",
+	.description = "Show messages with a tgw widget block as native widgets.",
+	.defaultValue = true,
+});
 
 struct TemplateDeleter {
 	void operator()(TWidgetTemplate *value) const;
@@ -179,6 +189,8 @@ template <typename Call>
 
 } // namespace
 
+const char kOptionLiveWidgets[] = "live-widgets";
+
 void InstanceDeleter::operator()(TWidgetInstance *value) const {
 	twidget_instance_drop(value);
 }
@@ -199,12 +211,25 @@ bool Available() {
 	return AbiMatches;
 }
 
+bool Enabled() {
+	return AbiMatches && LiveWidgetsOption.value();
+}
+
 Env CurrentEnv(bool dark) {
 	return {
 		.nowMs = ServerNowMs(),
 		.tzOffsetMinutes = QDateTime::currentDateTime().offsetFromUtc() / 60,
 		.dark = dark,
 		.rtl = style::RightToLeft(),
+	};
+}
+
+Env FixedEnv(bool dark, bool rtl) {
+	return {
+		.nowMs = kFixedNowMs,
+		.tzOffsetMinutes = kFixedTzOffsetMinutes,
+		.dark = dark,
+		.rtl = rtl,
 	};
 }
 

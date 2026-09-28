@@ -33,10 +33,14 @@ struct InstanceDeleter {
 
 using InstanceHandle = std::unique_ptr<TWidgetInstance, InstanceDeleter>;
 
+extern const char kOptionLiveWidgets[];
+
 void CheckAbiVersion();
 [[nodiscard]] bool Available();
+[[nodiscard]] bool Enabled();
 
 [[nodiscard]] Env CurrentEnv(bool dark);
+[[nodiscard]] Env FixedEnv(bool dark, bool rtl);
 
 [[nodiscard]] InstanceHandle LoadInstance(const QByteArray &envelope);
 

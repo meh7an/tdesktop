@@ -48,6 +48,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mainwidget.h"
 #include "media/player/media_player_instance.h"
 #include "mtproto/session_private.h"
+#include "twidget/twidget_api.h"
+#include "twidget/twidget_lab.h"
 #include "webview/webview_embed.h"
 #include "window/main_window.h"
 #include "window/window_filters_favorite.h"
@@ -520,6 +522,16 @@ void SetupExperimental(
 			}
 		});
 	}
+
+	addCategory(u"Live widgets"_q, [&](
+			not_null<Ui::VerticalLayout*> inner,
+			std::vector<QString> &searchable) {
+		searchable.push_back(addOption(inner, Twidget::kOptionLiveWidgets));
+		searchable.push_back(Twidget::AddLabButton(
+			window,
+			inner,
+			rpl::duplicate(query)));
+	});
 
 	addCategory(u"Other"_q, [&](
 			not_null<Ui::VerticalLayout*> inner,

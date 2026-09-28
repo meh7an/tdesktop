@@ -15,6 +15,12 @@ nice_target_sources(td_twidget ${src_loc}
 PRIVATE
     twidget/twidget_api.cpp
     twidget/twidget_api.h
+    twidget/twidget_conformance.cpp
+    twidget/twidget_conformance.h
+    twidget/twidget_layout.cpp
+    twidget/twidget_layout.h
+    twidget/twidget_model.cpp
+    twidget/twidget_model.h
     twidget/twidget_pch.h
 )
 
