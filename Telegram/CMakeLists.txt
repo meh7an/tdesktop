@@ -2013,10 +2013,14 @@ PRIVATE
     test/test_widgets.h
     twidget/twidget_lab.cpp
     twidget/twidget_lab.h
+    twidget/twidget_media.cpp
+    twidget/twidget_media.h
     twidget/twidget_paint.cpp
     twidget/twidget_paint.h
     twidget/twidget_text.cpp
     twidget/twidget_text.h
+    twidget/twidget_view.cpp
+    twidget/twidget_view.h
     ui/boxes/edit_invite_link_session.cpp
     ui/boxes/edit_invite_link_session.h
     ui/boxes/emoji_stake_box.cpp

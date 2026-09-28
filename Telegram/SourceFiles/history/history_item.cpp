@@ -80,6 +80,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "payments/payments_non_panel_process.h" // ProcessNonPanelPaymentFormFactory.
 #include "platform/platform_notifications_manager.h"
 #include "spellcheck/spellcheck_highlight_syntax.h"
+#include "twidget/twidget_media.h"
 #include "styles/style_dialogs.h"
 
 namespace {
@@ -4493,6 +4494,7 @@ void HistoryItem::setText(TextWithEntities textWithEntities) {
 	setTextValue((_media && _media->consumeMessageText(textWithEntities))
 		? TextWithEntities()
 		: std::move(textWithEntities));
+	Twidget::RefreshItemMedia(this);
 }
 
 std::shared_ptr<const Iv::RichPage> HistoryItem::richPage() const {
@@ -5397,6 +5399,7 @@ void HistoryItem::refreshMedia(const MTPMessageMedia *media) {
 	if (media) {
 		setMedia(*media);
 	}
+	Twidget::RefreshItemMedia(this);
 	if (was || _media) {
 		if (const auto views = Get<HistoryMessageViews>()) {
 			refreshRepliesText(views);

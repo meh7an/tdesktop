@@ -30,6 +30,7 @@ base::options::toggle LiveWidgetsOption({
 	.name = "Live widgets",
 	.description = "Show messages with a tgw widget block as native widgets.",
 	.defaultValue = true,
+	.restartRequired = true,
 });
 
 struct TemplateDeleter {
