@@ -1925,10 +1925,11 @@ release:
     buildTd Release
 """)
 
+tlottieCommit = '4b940c7942'
 stage('tlottie', """
     git clone https://github.com/dkaraush/tlottie.git
     cd tlottie
-    git checkout 4b940c7942
+    git checkout """ + tlottieCommit + """
 win:
     SET "RUSTUP_HOME=%THIRDPARTY_DIR%\\rust\\rustup"
     SET "CARGO_HOME=%THIRDPARTY_DIR%\\rust\\cargo"
@@ -1956,21 +1957,48 @@ win:
     copy target\\%RUST_TARGET%\\release\\tlottie.lib out\\lib\\tlottie.lib
     copy include\\tlottie.h out\\include\\tlottie.h
 mac:
+    mkdir -p $USED_PREFIX/include/tlottie
+    cp include/tlottie.h $USED_PREFIX/include/tlottie/tlottie.h
+""")
+
+# Linking tlottie and twidget as two Rust static libraries would bring two
+# copies of the Rust standard library: duplicate symbols, and one exception
+# personality routine too many for compact unwind. This umbrella library links
+# both once, pre-linked so that only their C functions stay global.
+rustUmbrellaSource = os.path.join(scriptPath, 'tdesktop_rust')
+twidgetSource = os.path.realpath(os.path.join(scriptPath, '..', '..', 'ThirdParty', 'twidget'))
+stage('tdesktop_rust', """
+version: """ + tlottieCommit + """
+version: """ + subprocess.run(['git', '-C', twidgetSource, 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip() + """
+depends:""" + rustUmbrellaSource + """/Cargo.lock
+depends:""" + rustUmbrellaSource + """/Cargo.toml
+depends:""" + rustUmbrellaSource + """/src/lib.rs
+mac:
     export RUSTUP_HOME=$THIRDPARTY_DIR/rust/rustup
     export CARGO_HOME=$THIRDPARTY_DIR/rust/cargo
     export RUSTUP_TOOLCHAIN=""" + rustToolchain + """
     export PATH=$CARGO_HOME/bin:$PATH
+    mkdir tdesktop_rust
+    cd tdesktop_rust
     buildOneArch() {
         cargo rustc --lib --release --locked \\
-            --features c-api --crate-type staticlib \\
+            --manifest-path """ + rustUmbrellaSource + """/Cargo.toml \\
+            --target-dir target \\
             --target $1 \\
             -- --print native-static-libs
+        nm -gU target/$1/release/libtdesktop_rust.a 2>/dev/null \\
+            | awk '$2 == "T" && $3 ~ /^_(tlottie|twidget)_/ { print $3 }' \\
+            | sort -u > target/$1/exports.txt
+        cc -arch $2 -r -nostdlib \\
+            -Wl,-exported_symbols_list,target/$1/exports.txt \\
+            $(sed 's/^/-Wl,-u,/' target/$1/exports.txt) \\
+            target/$1/release/libtdesktop_rust.a -o target/$1/tdesktop_rust.o
+        libtool -static -o target/$1/libtdesktop_rust.a target/$1/tdesktop_rust.o
     }
-    buildOneArch aarch64-apple-darwin
-    buildOneArch x86_64-apple-darwin
-    mkdir -p $USED_PREFIX/lib $USED_PREFIX/include/tlottie
-    lipo -create target/aarch64-apple-darwin/release/libtlottie.a target/x86_64-apple-darwin/release/libtlottie.a -output $USED_PREFIX/lib/libtlottie.a
-    cp include/tlottie.h $USED_PREFIX/include/tlottie/tlottie.h
+    buildOneArch aarch64-apple-darwin arm64
+    buildOneArch x86_64-apple-darwin x86_64
+    mkdir -p $USED_PREFIX/lib
+    lipo -create target/aarch64-apple-darwin/libtdesktop_rust.a target/x86_64-apple-darwin/libtdesktop_rust.a -output $USED_PREFIX/lib/libtdesktop_rust.a
 """)
 
 if win:

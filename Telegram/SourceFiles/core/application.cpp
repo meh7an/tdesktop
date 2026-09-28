@@ -100,6 +100,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/boxes/confirm_box.h"
 #include "core/cached_webview_availability.h"
 #include "test/test_agent.h"
+#include "twidget/twidget_api.h"
 
 #include <QtCore/QStandardPaths>
 #include <QtCore/QMimeDatabase>
@@ -374,6 +375,7 @@ void Application::run() {
 	LOG(("Qt version: %1 (compiled with %2)").arg(
 		QString::fromLatin1(qVersion()),
 		QString::fromLatin1(QT_VERSION_STR)));
+	Twidget::CheckAbiVersion();
 
 	DEBUG_LOG(("Application Info: starting app..."));
 

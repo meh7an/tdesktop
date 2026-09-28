@@ -1,0 +1,22 @@
+[package]
+name = "tdesktop_rust"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+tlottie = { path = "../../../../../Libraries/tlottie", features = ["c-api"] }
+twidget = { path = "../../../ThirdParty/twidget", features = ["c-api"] }
+
+# Cargo ignores the profiles of dependencies, so tlottie's release profile is
+# copied here and lottie compiles exactly as its own build did.
+[profile.release]
+opt-level = 3
+debug = false
+lto = "fat"
+codegen-units = 1
+
+[workspace]

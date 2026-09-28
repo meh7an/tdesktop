@@ -36,6 +36,7 @@ include(cmake/td_lang.cmake)
 include(cmake/td_mtproto.cmake)
 include(cmake/td_scheme.cmake)
 include(cmake/td_tde2e.cmake)
+include(cmake/td_twidget.cmake)
 include(cmake/td_ui.cmake)
 include(cmake/td_webauthn.cmake)
 include(cmake/telegram_apple_swift_runtime.cmake)
@@ -72,6 +73,7 @@ PRIVATE
     tdesktop::td_mtproto
     tdesktop::td_scheme
     tdesktop::td_tde2e
+    tdesktop::td_twidget
     tdesktop::td_ui
     tdesktop::td_webauthn
     desktop-app::lib_webrtc
