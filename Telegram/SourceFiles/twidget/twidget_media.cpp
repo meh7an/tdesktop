@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_peer.h"
 #include "history/history.h"
 #include "history/history_item.h"
+#include "history/view/history_view_item_preview.h"
 #include "twidget/twidget_model.h"
 #include "twidget/twidget_view.h"
 #include "window/themes/window_theme.h"
@@ -34,8 +35,11 @@ std::shared_ptr<const Document> ResolveWidget(
 		const Env &env) {
 	const auto resolved = Resolve(data->instance.get(), env);
 	if (!resolved) {
+		data->nextWakeupMs = std::nullopt;
 		return nullptr;
-	} else if (resolved->tree != data->tree || !data->document) {
+	}
+	data->nextWakeupMs = resolved->nextWakeupMs;
+	if (resolved->tree != data->tree || !data->document) {
 		auto document = ParseResolved(resolved->tree);
 		data->tree = resolved->tree;
 		data->document = document
@@ -73,8 +77,20 @@ std::unique_ptr<Data::Media> MediaWidget::clone(
 	return _replaced ? _replaced->clone(parent) : nullptr;
 }
 
+Data::Media::ItemPreview MediaWidget::toPreview(
+		ToPreviewOptions options) const {
+	return { .text = { summary() } };
+}
+
 TextWithEntities MediaWidget::notificationText() const {
-	return parent()->originalText();
+	return { summary() };
+}
+
+QString MediaWidget::summary() const {
+	const auto env = CurrentEnv(Window::Theme::IsNightMode());
+	const auto result = Summary(_data->instance.get(), env).value_or(
+		QString());
+	return result.isEmpty() ? u"Live widget"_q : result;
 }
 
 QString MediaWidget::pinnedTextSubstring() const {
@@ -101,7 +117,7 @@ std::unique_ptr<HistoryView::Media> MediaWidget::createView(
 		not_null<HistoryView::Element*> message,
 		not_null<HistoryItem*> realParent,
 		HistoryView::Element *replacing) {
-	return std::make_unique<WidgetView>(message, _data);
+	return std::make_unique<WidgetView>(message, _data, replacing);
 }
 
 void RefreshItemMedia(not_null<HistoryItem*> item) {

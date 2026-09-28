@@ -19,6 +19,7 @@ struct WidgetData {
 	InstanceHandle instance;
 	QByteArray tree;
 	std::shared_ptr<const Document> document;
+	std::optional<int64> nextWakeupMs;
 };
 
 [[nodiscard]] std::shared_ptr<const Document> ResolveWidget(
@@ -40,6 +41,7 @@ public:
 
 	std::unique_ptr<Data::Media> clone(not_null<HistoryItem*> parent) override;
 
+	ItemPreview toPreview(ToPreviewOptions options) const override;
 	TextWithEntities notificationText() const override;
 	QString pinnedTextSubstring() const override;
 	TextForMimeData clipboardText() const override;
@@ -53,6 +55,8 @@ public:
 		HistoryView::Element *replacing = nullptr) override;
 
 private:
+	[[nodiscard]] QString summary() const;
+
 	const std::shared_ptr<WidgetData> _data;
 	std::unique_ptr<Data::Media> _replaced;
 
