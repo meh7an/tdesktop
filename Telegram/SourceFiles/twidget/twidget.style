@@ -20,6 +20,9 @@ twidgetMonoStyle: TextStyle(defaultTextStyle) {
 	font: font(13px);
 }
 
-twidgetLabWidth: 480px;
+twidgetLabWidth: 560px;
+twidgetLabControlPadding: margins(24px, 6px, 24px, 6px);
+twidgetLabSliderPadding: margins(24px, 4px, 24px, 12px);
 twidgetLabNamePadding: margins(24px, 12px, 24px, 6px);
+twidgetLabSendPadding: margins(24px, 0px, 24px, 4px);
 twidgetLabBubbleSkip: 8px;

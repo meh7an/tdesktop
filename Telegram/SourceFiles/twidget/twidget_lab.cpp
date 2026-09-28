@@ -7,8 +7,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "twidget/twidget_lab.h"
 
+#include "api/api_common.h"
+#include "apiwrap.h"
+#include "base/debug_log.h"
 #include "base/options.h"
+#include "base/timer.h"
+#include "base/weak_ptr.h"
+#include "data/data_thread.h"
 #include "lang/lang_keys.h"
+#include "main/main_session.h"
 #include "settings/settings_common.h"
 #include "twidget/twidget_api.h"
 #include "twidget/twidget_conformance.h"
@@ -20,11 +27,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/layers/generic_box.h"
 #include "ui/painter.h"
 #include "ui/rp_widget.h"
+#include "ui/text/text_entity.h"
 #include "ui/widgets/buttons.h"
+#include "ui/widgets/checkbox.h"
+#include "ui/widgets/continuous_sliders.h"
 #include "ui/widgets/labels.h"
 #include "ui/wrap/slide_wrap.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_controller.h"
+#include "window/window_peer_menu.h"
 #include "window/window_session_controller.h"
 
 #include "styles/style_chat.h"
@@ -38,13 +49,55 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace Twidget {
 namespace {
 
-constexpr auto kPreviewWidth = 320.;
+constexpr auto kMinWidth = 240;
+constexpr auto kMaxWidth = 480;
+constexpr auto kDefaultWidth = 320;
+constexpr auto kMessageLimit = 4096;
+
+struct LabState {
+	rpl::variable<bool> rtl = false;
+	rpl::variable<bool> frozen = false;
+	rpl::variable<bool> visible = false;
+	rpl::variable<int> width = kDefaultWidth;
+};
+
+class Fixture final {
+public:
+	Fixture(
+		QString name,
+		QByteArray envelope,
+		not_null<const Ui::ChatStyle*> st,
+		not_null<LabState*> state);
+
+	[[nodiscard]] const QString &name() const;
+	[[nodiscard]] bool loaded() const;
+	[[nodiscard]] std::shared_ptr<const Document> document() const;
+	[[nodiscard]] rpl::producer<> updates() const;
+	[[nodiscard]] TextWithEntities message() const;
+
+private:
+	[[nodiscard]] Env env() const;
+	void resolve();
+
+	const QString _name;
+	const QByteArray _envelope;
+	const not_null<const Ui::ChatStyle*> _st;
+	const not_null<LabState*> _state;
+	const InstanceHandle _instance;
+	QByteArray _tree;
+	std::shared_ptr<const Document> _document;
+	base::Timer _timer;
+	rpl::event_stream<> _updates;
+	rpl::lifetime _lifetime;
+
+};
 
 class Preview final : public Ui::RpWidget {
 public:
 	Preview(
 		QWidget *parent,
-		std::shared_ptr<const Document> document,
+		not_null<Fixture*> fixture,
+		not_null<LabState*> state,
 		not_null<const Ui::ChatStyle*> st,
 		not_null<const RealTextMeasurer*> measurer,
 		bool outgoing);
@@ -54,40 +107,164 @@ protected:
 	void paintEvent(QPaintEvent *e) override;
 
 private:
-	const std::shared_ptr<const Document> _document;
+	const not_null<Fixture*> _fixture;
+	const not_null<LabState*> _state;
 	const not_null<const Ui::ChatStyle*> _st;
 	const not_null<const RealTextMeasurer*> _measurer;
 	const bool _outgoing = false;
+	std::shared_ptr<const Document> _document;
 	Layout _layout;
 	QRect _bubble;
+	bool _rtl = false;
 
 };
 
+Fixture::Fixture(
+	QString name,
+	QByteArray envelope,
+	not_null<const Ui::ChatStyle*> st,
+	not_null<LabState*> state)
+: _name(std::move(name))
+, _envelope(std::move(envelope))
+, _st(st)
+, _state(state)
+, _instance(LoadInstance(_envelope))
+, _timer([=] { resolve(); }) {
+	rpl::combine(
+		_state->rtl.value(),
+		_state->frozen.value()
+	) | rpl::to_empty | rpl::on_next([=] {
+		resolve();
+	}, _lifetime);
+
+	_state->visible.changes() | rpl::on_next([=](bool visible) {
+		if (visible) {
+			resolve();
+		} else {
+			_timer.cancel();
+		}
+	}, _lifetime);
+}
+
+const QString &Fixture::name() const {
+	return _name;
+}
+
+bool Fixture::loaded() const {
+	return (_instance != nullptr);
+}
+
+std::shared_ptr<const Document> Fixture::document() const {
+	return _document;
+}
+
+rpl::producer<> Fixture::updates() const {
+	return _updates.events();
+}
+
+TextWithEntities Fixture::message() const {
+	const auto summary = _instance
+		? Summary(_instance.get(), env()).value_or(QString())
+		: QString();
+	const auto fallback = summary.isEmpty() ? u"Live widget"_q : summary;
+	const auto envelope = QString::fromUtf8(_envelope).trimmed();
+	auto result = TextWithEntities{ .text = fallback + u'\n' + envelope };
+	result.entities.push_back(EntityInText(
+		EntityType::Pre,
+		int(fallback.size()) + 1,
+		int(envelope.size()),
+		u"tgw"_q));
+	return result;
+}
+
+Env Fixture::env() const {
+	const auto dark = _st->dark();
+	const auto rtl = _state->rtl.current();
+	auto result = _state->frozen.current()
+		? FixedEnv(dark, rtl)
+		: CurrentEnv(dark);
+	result.rtl = rtl;
+	return result;
+}
+
+void Fixture::resolve() {
+	_timer.cancel();
+	if (!_instance) {
+		return;
+	}
+	const auto env = this->env();
+	const auto frozen = _state->frozen.current();
+	const auto resolved = Resolve(_instance.get(), env);
+	LOG(("Twidget Lab: resolved %1, rtl %2, frozen %3."
+		).arg(_name
+		).arg(env.rtl ? u"on"_q : u"off"_q
+		).arg(frozen ? u"on"_q : u"off"_q));
+	if (!resolved) {
+		if (_document) {
+			_tree = QByteArray();
+			_document = nullptr;
+			_updates.fire({});
+		}
+		return;
+	} else if (resolved->tree != _tree) {
+		auto document = ParseResolved(resolved->tree);
+		_tree = resolved->tree;
+		_document = document
+			? std::make_shared<const Document>(std::move(*document))
+			: nullptr;
+		_updates.fire({});
+	}
+	if (resolved->nextWakeupMs && !frozen && _state->visible.current()) {
+		const auto now = CurrentEnv(env.dark).nowMs;
+		_timer.callOnce(std::max(*resolved->nextWakeupMs - now, int64()));
+	}
+}
+
 Preview::Preview(
 	QWidget *parent,
-	std::shared_ptr<const Document> document,
+	not_null<Fixture*> fixture,
+	not_null<LabState*> state,
 	not_null<const Ui::ChatStyle*> st,
 	not_null<const RealTextMeasurer*> measurer,
 	bool outgoing)
 : RpWidget(parent)
-, _document(std::move(document))
+, _fixture(fixture)
+, _state(state)
 , _st(st)
 , _measurer(measurer)
 , _outgoing(outgoing) {
+	rpl::merge(
+		_fixture->updates(),
+		_state->rtl.changes() | rpl::to_empty,
+		_state->width.changes() | rpl::to_empty
+	) | rpl::on_next([=] {
+		resizeToWidth(width());
+		update();
+	}, lifetime());
+
 	_st->paletteChanged() | rpl::on_next([=] {
 		update();
 	}, lifetime());
 }
 
 int Preview::resizeGetHeight(int newWidth) {
+	auto document = _fixture->document();
+	if (!document) {
+		_layout = Layout();
+		_document = nullptr;
+		_bubble = QRect();
+		return 0;
+	}
 	const auto &padding = st::msgPadding;
 	const auto unit = _measurer->unit();
 	const auto inner = newWidth - padding.left() - padding.right();
+	_rtl = _state->rtl.current();
 	_layout = LayOut(
-		*_document,
-		std::min(kPreviewWidth, std::max(inner, 0) / unit),
-		false,
+		*document,
+		std::min(float64(_state->width.current()), std::max(inner, 0) / unit),
+		_rtl,
 		*_measurer);
+	_document = std::move(document);
 	const auto width = int(std::ceil(_layout.width * unit))
 		+ padding.left()
 		+ padding.right();
@@ -99,6 +276,9 @@ int Preview::resizeGetHeight(int newWidth) {
 }
 
 void Preview::paintEvent(QPaintEvent *e) {
+	if (_bubble.isEmpty()) {
+		return;
+	}
 	auto p = QPainter(this);
 	const auto &message = _st->messageStyle(_outgoing, false);
 	const auto radius = Ui::BubbleRadiusLarge();
@@ -119,59 +299,150 @@ void Preview::paintEvent(QPaintEvent *e) {
 	Paint(p, _layout, {
 		.measurer = _measurer,
 		.palette = &palette,
+		.rtl = _rtl,
 	});
 }
 
-[[nodiscard]] std::shared_ptr<const Document> LoadFixture(
+void AddControls(
+		not_null<Ui::VerticalLayout*> container,
+		not_null<LabState*> state) {
+	const auto addCheckbox = [&](
+			const QString &text,
+			rpl::variable<bool> LabState::*field) {
+		const auto checkbox = container->add(
+			object_ptr<Ui::Checkbox>(
+				container,
+				text,
+				(state->*field).current(),
+				st::defaultBoxCheckbox),
+			st::twidgetLabControlPadding);
+		checkbox->checkedChanges(
+		) | rpl::on_next([=](bool checked) {
+			state->*field = checked;
+		}, checkbox->lifetime());
+	};
+	addCheckbox(u"Right to left"_q, &LabState::rtl);
+	addCheckbox(u"Frozen time"_q, &LabState::frozen);
+
+	container->add(
+		object_ptr<Ui::FlatLabel>(
+			container,
+			state->width.value() | rpl::map([](int width) {
+				return u"Width: %1"_q.arg(width);
+			}),
+			st::boxLabel),
+		st::twidgetLabControlPadding);
+	const auto slider = container->add(
+		object_ptr<Ui::MediaSliderWheelless>(container, st::settingsScale),
+		st::twidgetLabSliderPadding);
+	slider->resize(slider->width(), st::settingsScale.seekSize.height());
+	slider->setPseudoDiscrete(
+		kMaxWidth - kMinWidth + 1,
+		[](int index) { return kMinWidth + index; },
+		state->width.current(),
+		[=](int width) { state->width = width; });
+}
+
+[[nodiscard]] bool RefuseLong(
+		not_null<Window::Controller*> window,
 		const QString &name,
-		bool dark) {
-	auto file = QFile(u":/tgw/fixtures/envelopes/%1.json"_q.arg(name));
-	if (!file.open(QIODevice::ReadOnly)) {
-		return nullptr;
+		const TextWithEntities &message) {
+	const auto size = int(message.text.size());
+	if (size <= kMessageLimit) {
+		return false;
 	}
-	const auto instance = LoadInstance(file.readAll());
-	const auto resolved = instance
-		? Resolve(instance.get(), FixedEnv(dark, false))
-		: std::nullopt;
-	auto document = resolved
-		? ParseResolved(resolved->tree)
-		: std::nullopt;
-	return document
-		? std::make_shared<const Document>(std::move(*document))
-		: nullptr;
+	LOG(("Twidget Lab: refused to send %1, %2 UTF-16 code units."
+		).arg(name
+		).arg(size));
+	window->showToast(u"Too long to send: %1 of %2 UTF-16 code units."_q
+		.arg(size)
+		.arg(kMessageLimit));
+	return true;
+}
+
+void SendToChat(
+		not_null<Window::SessionController*> controller,
+		not_null<Fixture*> fixture) {
+	const auto window = &controller->window();
+	const auto name = fixture->name();
+	const auto message = fixture->message();
+	if (RefuseLong(window, name, message)) {
+		return;
+	}
+	const auto weak = base::make_weak(window);
+	Window::ShowChooseRecipientBox(controller, [=](
+			not_null<Data::Thread*> thread) {
+		auto send = Api::MessageToSend(Api::SendAction(thread));
+		send.textWithTags = TextWithTags{
+			message.text,
+			TextUtilities::ConvertEntitiesToTextTags(message.entities),
+		};
+		send.webPage.removed = true;
+		send.action.clearDraft = false;
+		thread->session().api().sendMessage(std::move(send));
+		LOG(("Twidget Lab: sent %1, %2 UTF-16 code units."
+			).arg(name
+			).arg(message.text.size()));
+		if (const auto strong = weak.get()) {
+			strong->showToast(u"Sent %1."_q.arg(name));
+		}
+		return true;
+	}, rpl::single(u"Send %1 to"_q.arg(name)));
 }
 
 void FixturesBox(
 		not_null<Ui::GenericBox*> box,
-		not_null<const Ui::ChatStyle*> st) {
+		not_null<Window::SessionController*> controller) {
 	box->setTitle(rpl::single(u"Live widgets fixtures"_q));
 	box->setWidth(st::twidgetLabWidth);
 
+	const auto st = controller->chatStyle();
+	const auto state = box->lifetime().make_state<LabState>();
 	const auto measurer = box->lifetime().make_state<RealTextMeasurer>();
+	state->visible = box->shownValue();
+	AddControls(
+		box->setPinnedToTopContent(object_ptr<Ui::VerticalLayout>(box)),
+		state);
+
 	const auto files = QDir(u":/tgw/fixtures/envelopes"_q).entryList(
 		QDir::Files,
 		QDir::Name);
 	for (const auto &file : files) {
 		const auto name = file.chopped(5);
+		auto source = QFile(u":/tgw/fixtures/envelopes/"_q + file);
+		const auto fixture = box->lifetime().make_state<Fixture>(
+			name,
+			(source.open(QIODevice::ReadOnly)
+				? source.readAll()
+				: QByteArray()),
+			st,
+			state);
 		box->addRow(
 			object_ptr<Ui::FlatLabel>(box, name, st::boxLabel),
 			st::twidgetLabNamePadding);
-		const auto document = LoadFixture(name, st->dark());
-		if (!document) {
+		if (!fixture->loaded()) {
 			box->addRow(object_ptr<Ui::FlatLabel>(
 				box,
-				u"Failed to resolve."_q,
+				u"Failed to load."_q,
 				st::boxLabel));
 			continue;
 		}
 		for (const auto outgoing : { false, true }) {
 			box->addRow(object_ptr<Preview>(
 				box,
-				document,
+				fixture,
+				state,
 				st,
 				measurer,
 				outgoing));
 		}
+		const auto send = box->addRow(
+			object_ptr<Ui::LinkButton>(box, u"Send to chat"_q),
+			st::twidgetLabSendPadding,
+			style::al_right);
+		send->setClickedCallback([=] {
+			SendToChat(controller, fixture);
+		});
 	}
 	box->addButton(tr::lng_close(), [=] {
 		box->closeBox();
@@ -203,9 +474,8 @@ void LabBox(
 		box->addRow(object_ptr<Ui::FlatLabel>(box, text, st::boxLabel));
 	}
 	if (const auto controller = window->sessionController()) {
-		const auto st = controller->chatStyle();
 		box->addLeftButton(rpl::single(u"Fixtures"_q), [=] {
-			window->show(Box(FixturesBox, st));
+			window->show(Box(FixturesBox, controller));
 		});
 	}
 	box->addButton(tr::lng_close(), [=] {
